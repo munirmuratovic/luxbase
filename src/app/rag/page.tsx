@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 
 type Source = {
   id: string;
@@ -220,15 +222,25 @@ export default function RagPage() {
 
   return (
     <div className="min-h-full flex-1 bg-background font-sans text-foreground">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-8 lg:h-screen lg:py-10">
-        <header className="flex items-baseline justify-between gap-4">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-semibold tracking-tight">Luxbase</h1>
-            <span className="text-sm text-muted">local memory · pgvector + ollama</span>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 lg:h-screen lg:py-10">
+        <header className="flex items-end justify-between gap-4 border-b-2 border-foreground pb-4">
+          <div className="flex items-end gap-4">
+            <h1
+              className="text-4xl font-bold leading-none tracking-tight"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Luxbase<span className="text-accent">.</span>
+            </h1>
+            <span className="mb-1 font-mono text-xs uppercase tracking-[0.2em] text-muted">
+              local memory / pgvector + ollama
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            running on-device
+          <div className="mb-1 flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+            </span>
+            on-device · no cloud calls
           </div>
         </header>
 
@@ -267,9 +279,11 @@ export default function RagPage() {
                       </div>
 
                       {m.remembered && m.remembered.length > 0 && (
-                        <p className="mt-1.5 flex items-start gap-1.5 px-1 text-xs text-accent">
+                        <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent">
                           <span aria-hidden>◆</span>
-                          <span>{m.remembered.join(" · ")}</span>
+                          <span className="font-mono font-normal">
+                            {m.remembered.join(" · ")}
+                          </span>
                         </p>
                       )}
 
@@ -326,21 +340,21 @@ export default function RagPage() {
                   if (e.key === "Enter") handleSend();
                 }}
               />
-              <button
-                className="rounded-lg bg-accent px-4 text-sm font-medium text-on-accent transition-opacity disabled:opacity-40"
+              <Button
+                className="h-auto py-2.5"
                 disabled={asking || !input.trim()}
                 onClick={handleSend}
               >
-                {asking ? "…" : "Send"}
-              </button>
+                {asking ? "…" : "Send →"}
+              </Button>
             </div>
           </section>
 
           {/* System state */}
           <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto">
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-                Pipeline
+            <div className="rounded-xl border-2 border-border bg-surface p-4">
+              <h2 className="mb-3 font-mono text-xs font-bold uppercase tracking-[0.15em] text-foreground">
+                Pipeline<span className="text-accent">_</span>
               </h2>
               {steps.length === 0 ? (
                 <p className="text-xs text-muted">
@@ -427,140 +441,136 @@ export default function RagPage() {
               )}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-surface p-4">
-              <div className="mb-3 flex items-center gap-1 border-b border-border">
-                {(["memories", "records", "documents"] as TableKind[]).map(
-                  (tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={
-                        "relative px-2.5 pb-2.5 text-xs font-medium capitalize transition-colors " +
-                        (activeTab === tab
-                          ? "text-foreground"
-                          : "text-muted hover:text-foreground")
-                      }
-                    >
-                      {tab}
-                      <span className="ml-1 font-mono text-[10px] tabular-nums text-muted">
-                        {tabCount[tab]}
-                      </span>
-                      {activeTab === tab && (
-                        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />
-                      )}
-                    </button>
-                  ),
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as TableKind)}
+              className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-surface p-4"
+            >
+              <div className="mb-3 flex items-center gap-1.5">
+                <TabsList>
+                  {(["memories", "records", "documents"] as TableKind[]).map(
+                    (tab) => (
+                      <TabsTab key={tab} value={tab}>
+                        {tab}
+                        <span className="ml-1 font-mono text-[10px] tabular-nums opacity-70">
+                          {tabCount[tab]}
+                        </span>
+                      </TabsTab>
+                    ),
+                  )}
+                </TabsList>
+                {docsLoading && (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
                 )}
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => clearTable(activeTab)}
                   disabled={tabCount[activeTab] === 0}
-                  className="ml-auto mb-2.5 text-[11px] text-muted transition-colors hover:text-danger disabled:opacity-30"
+                  className="ml-auto h-auto p-0 font-normal hover:bg-transparent hover:text-danger"
                 >
                   clear
-                </button>
+                </Button>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {activeTab === "memories" && (
-                  <ul className="flex flex-col gap-0.5">
-                    {memoryRows.length === 0 && (
-                      <li className="py-1 text-xs text-muted">No memories yet.</li>
-                    )}
-                    {memoryRows.map((m) => (
-                      <li
-                        key={m.id}
-                        className="group flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
+              <TabsPanel value="memories" className="overflow-y-auto">
+                <ul className="flex flex-col gap-0.5">
+                  {memoryRows.length === 0 && (
+                    <li className="py-1 text-xs text-muted">No memories yet.</li>
+                  )}
+                  {memoryRows.map((m) => (
+                    <li
+                      key={m.id}
+                      className="group flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
+                    >
+                      <p className="text-xs leading-snug">
+                        <span className="font-mono text-muted">
+                          {m.subject}.{m.attribute}
+                        </span>{" "}
+                        <span>{m.value}</span>
+                      </p>
+                      <button
+                        onClick={() => deleteRow("memories", m.id)}
+                        aria-label="Delete memory"
+                        className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       >
-                        <p className="text-xs leading-snug">
-                          <span className="font-mono text-muted">
-                            {m.subject}.{m.attribute}
-                          </span>{" "}
-                          <span>{m.value}</span>
-                        </p>
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
+
+              <TabsPanel value="records" className="overflow-y-auto">
+                <ul className="flex flex-col gap-1.5">
+                  {recordRows.length === 0 && (
+                    <li className="py-1 text-xs text-muted">No records yet.</li>
+                  )}
+                  {recordRows.map((r) => (
+                    <li
+                      key={r.id}
+                      className="group rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium">
+                            {String(
+                              (r.data as { title?: string }).title ?? r.type,
+                            )}
+                            {(r.data as { company?: string }).company && (
+                              <span className="font-normal text-muted">
+                                {" "}
+                                · {(r.data as { company?: string }).company}
+                              </span>
+                            )}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted">
+                            {r.startDate ?? "?"} – {r.endDate ?? "present"}
+                          </p>
+                        </div>
                         <button
-                          onClick={() => deleteRow("memories", m.id)}
-                          aria-label="Delete memory"
+                          onClick={() => deleteRow("records", r.id)}
+                          aria-label="Delete record"
                           className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                         >
                           ✕
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
 
-                {activeTab === "records" && (
-                  <ul className="flex flex-col gap-1.5">
-                    {recordRows.length === 0 && (
-                      <li className="py-1 text-xs text-muted">No records yet.</li>
-                    )}
-                    {recordRows.map((r) => (
-                      <li
-                        key={r.id}
-                        className="group rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-medium">
-                              {String(
-                                (r.data as { title?: string }).title ??
-                                  r.type,
-                              )}
-                              {(r.data as { company?: string }).company && (
-                                <span className="font-normal text-muted">
-                                  {" "}
-                                  · {(r.data as { company?: string }).company}
-                                </span>
-                              )}
-                            </p>
-                            <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted">
-                              {r.startDate ?? "?"} – {r.endDate ?? "present"}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => deleteRow("records", r.id)}
-                            aria-label="Delete record"
-                            className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {activeTab === "documents" && (
-                  <ul className="flex flex-col gap-1.5">
-                    {docs.length === 0 && (
-                      <li className="py-1 text-xs text-muted">No documents yet.</li>
-                    )}
-                    {docs.map((d) => (
-                      <li
-                        key={d.id}
-                        className="group rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="min-w-0 flex-1 truncate text-xs text-foreground">
-                            {d.content.slice(0, 90)}
-                          </p>
-                          <button
-                            onClick={() => deleteRow("documents", d.id)}
-                            aria-label="Delete document"
-                            className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <p className="font-mono text-[11px] text-muted">
-                          {d.source ?? "untitled"} · {fmtTime(d.createdAt)}
+              <TabsPanel value="documents" className="overflow-y-auto">
+                <ul className="flex flex-col gap-1.5">
+                  {docs.length === 0 && (
+                    <li className="py-1 text-xs text-muted">No documents yet.</li>
+                  )}
+                  {docs.map((d) => (
+                    <li
+                      key={d.id}
+                      className="group rounded-lg px-2 py-1.5 hover:bg-surface-sunken"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 truncate text-xs text-foreground">
+                          {d.content.slice(0, 90)}
                         </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+                        <button
+                          onClick={() => deleteRow("documents", d.id)}
+                          aria-label="Delete document"
+                          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="font-mono text-[11px] text-muted">
+                        {d.source ?? "untitled"} · {fmtTime(d.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
+            </Tabs>
           </aside>
         </main>
       </div>

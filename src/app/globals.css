@@ -1,17 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #fbfaf8;
+  --background: #f7f4ee;
   --surface: #ffffff;
-  --surface-sunken: #f3f1ed;
-  --foreground: #1c1a17;
-  --muted: #6f6a63;
-  --border: #e6e2da;
-  --accent: #0f8a7e;
-  --accent-soft: #e3f3f1;
+  --surface-sunken: #eeeae1;
+  --foreground: #17140f;
+  --muted: #726c60;
+  --border: #ddd6c8;
+  --accent: #6d28d9;
+  --accent-soft: #ece3fb;
   --on-accent: #ffffff;
   --warn: #b8791a;
-  --danger: #b8452f;
+  --danger: #c8341f;
 }
 
 @theme inline {
@@ -28,36 +29,37 @@
   --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: "Space Grotesk", var(--font-geist-sans), sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #15130f;
-    --surface: #1c1a15;
-    --surface-sunken: #12100c;
-    --foreground: #f2efe9;
-    --muted: #948d80;
-    --border: #322e26;
-    --accent: #2dd4c2;
-    --accent-soft: #1a3936;
-    --on-accent: #0a2a26;
-    --warn: #e0a844;
-    --danger: #e07158;
+    --background: #100e0a;
+    --surface: #1a170f;
+    --surface-sunken: #0b0a07;
+    --foreground: #f5f1e8;
+    --muted: #948b78;
+    --border: #2e2a1f;
+    --accent: #a855f7;
+    --accent-soft: #2c1b45;
+    --on-accent: #180a29;
+    --warn: #f0b854;
+    --danger: #ff7a5c;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #15130f;
-  --surface: #1c1a15;
-  --surface-sunken: #12100c;
-  --foreground: #f2efe9;
-  --muted: #948d80;
-  --border: #322e26;
-  --accent: #2dd4c2;
-  --accent-soft: #1a3936;
-  --on-accent: #0a2a26;
-  --warn: #e0a844;
-  --danger: #e07158;
+  --background: #100e0a;
+  --surface: #1a170f;
+  --surface-sunken: #0b0a07;
+  --foreground: #f5f1e8;
+  --muted: #948b78;
+  --border: #2e2a1f;
+  --accent: #a855f7;
+  --accent-soft: #2c1b45;
+  --on-accent: #180a29;
+  --warn: #f0b854;
+  --danger: #ff7a5c;
 }
 
 body {
