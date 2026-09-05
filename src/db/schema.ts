@@ -1,5 +1,7 @@
 import {
+  date,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -42,6 +44,30 @@ export const memories = pgTable(
       table.attribute,
     ),
     index("memories_embedding_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
+  ],
+);
+
+export const records = pgTable(
+  "records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: text("type").notNull(),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
+    data: jsonb("data").notNull(),
+    embedding: vector("embedding", { dimensions: 384 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("records_type_dates_idx").on(
+      table.type,
+      table.startDate,
+      table.endDate,
+    ),
+    index("records_embedding_idx").using(
       "hnsw",
       table.embedding.op("vector_cosine_ops"),
     ),

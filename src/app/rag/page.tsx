@@ -18,13 +18,21 @@ type Message = {
 
 type MemoryFact = { subject: string; attribute: string; value: string };
 
+type ExtractedRecord = {
+  type: string;
+  startDate: string | null;
+  endDate: string | null;
+  data: Record<string, unknown>;
+};
+
 type StepEvent = {
-  stage: "retrieve" | "judge" | "save" | "generate";
+  stage: "retrieve" | "judge" | "save" | "generate" | "extract_records";
   status: "start" | "done";
   ms?: number;
   sources?: Source[];
   judgement?: { shouldSave: boolean; facts: MemoryFact[] };
   facts?: MemoryFact[];
+  records?: ExtractedRecord[];
 };
 
 type DocRow = {
@@ -42,9 +50,18 @@ type MemoryRow = {
   updatedAt: string;
 };
 
+type RecordRow = {
+  id: string;
+  type: string;
+  startDate: string | null;
+  endDate: string | null;
+  data: Record<string, unknown>;
+};
+
 const STAGE_LABEL: Record<StepEvent["stage"], string> = {
   retrieve: "Retrieving context",
   judge: "Judging memory-worthiness",
+  extract_records: "Extracting structured records",
   save: "Saving to memory",
   generate: "Generating answer",
 };
@@ -56,6 +73,7 @@ export default function RagPage() {
   const [steps, setSteps] = useState<StepEvent[]>([]);
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [memoryRows, setMemoryRows] = useState<MemoryRow[]>([]);
+  const [recordRows, setRecordRows] = useState<RecordRow[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,6 +84,7 @@ export default function RagPage() {
       const data = await res.json();
       setDocs(data.documents ?? []);
       setMemoryRows(data.memories ?? []);
+      setRecordRows(data.records ?? []);
     } finally {
       setDocsLoading(false);
     }
@@ -258,6 +277,21 @@ export default function RagPage() {
                       )}
                     </div>
                   )}
+                  {s.stage === "extract_records" && s.records && (
+                    <ul className="ml-4 mt-1 flex flex-col gap-0.5 text-zinc-500">
+                      {s.records.map((r, ri) => (
+                        <li key={ri}>
+                          {r.type} ({r.startDate ?? "?"} – {r.endDate ?? "present"}
+                          ): {JSON.stringify(r.data)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {s.stage === "save" && s.records && (
+                    <p className="ml-4 mt-1 text-zinc-500">
+                      Saved {s.records.length} record(s)
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -297,6 +331,52 @@ export default function RagPage() {
                       </td>
                       <td className="py-1 text-black dark:text-zinc-50">
                         {m.value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-black dark:text-zinc-50">
+                Records ({recordRows.length})
+              </h2>
+              <button
+                className="text-xs text-zinc-500 underline"
+                onClick={loadDocs}
+                disabled={docsLoading}
+              >
+                {docsLoading ? "..." : "refresh"}
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-zinc-500">
+                    <th className="pr-2 pb-1 font-medium">Type</th>
+                    <th className="pr-2 pb-1 font-medium">Start</th>
+                    <th className="pr-2 pb-1 font-medium">End</th>
+                    <th className="pb-1 font-medium">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recordRows.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-t border-black/[.06] dark:border-white/[.1]"
+                    >
+                      <td className="py-1 pr-2 text-zinc-500">{r.type}</td>
+                      <td className="py-1 pr-2 text-zinc-500">
+                        {r.startDate ?? "?"}
+                      </td>
+                      <td className="py-1 pr-2 text-zinc-500">
+                        {r.endDate ?? "present"}
+                      </td>
+                      <td className="py-1 text-black dark:text-zinc-50">
+                        {JSON.stringify(r.data)}
                       </td>
                     </tr>
                   ))}

@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { documents, memories } from "@/db/schema";
+import { documents, memories, records } from "@/db/schema";
 import { chunkText } from "./chunk";
 import { embed, embedBatch } from "./embeddings";
 import type { MemoryFact } from "./memory";
+import type { ExtractedRecord } from "./records";
 
 export async function ingestDocument(content: string, source?: string) {
   const chunks = chunkText(content);
@@ -42,4 +43,17 @@ export async function saveMemoryFact(fact: MemoryFact) {
         updatedAt: sql`now()`,
       },
     });
+}
+
+export async function saveRecord(record: ExtractedRecord) {
+  const text = `${record.type}: ${JSON.stringify(record.data)}`;
+  const vector = await embed(text);
+
+  await db.insert(records).values({
+    type: record.type,
+    startDate: record.startDate,
+    endDate: record.endDate,
+    data: record.data,
+    embedding: vector,
+  });
 }

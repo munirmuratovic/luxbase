@@ -1,6 +1,6 @@
-import { sql } from "drizzle-orm";
+import { and, lte, or, isNull, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { documents, memories } from "@/db/schema";
+import { documents, memories, records } from "@/db/schema";
 import { embed } from "./embeddings";
 
 export type RetrievedChunk = {
@@ -49,4 +49,42 @@ export async function retrieve(query: string, topK = 5): Promise<RetrievedChunk[
   ];
 
   return merged.sort((a, b) => a.distance - b.distance).slice(0, topK);
+}
+
+function describeRecord(
+  type: string,
+  data: Record<string, unknown>,
+  isoDate: string,
+): string {
+  if (type === "work_experience") {
+    const company = data.company ?? "an unknown company";
+    const title = data.title ?? "an unspecified role";
+    return `On ${isoDate}, worked as ${title} at ${company}.`;
+  }
+  return `On ${isoDate}: ${type}: ${JSON.stringify(data)}`;
+}
+
+export async function queryRecordsByDate(
+  isoDate: string,
+): Promise<RetrievedChunk[]> {
+  const rows = await db
+    .select({
+      id: records.id,
+      type: records.type,
+      data: records.data,
+    })
+    .from(records)
+    .where(
+      and(
+        lte(records.startDate, isoDate),
+        or(isNull(records.endDate), gte(records.endDate, isoDate)),
+      ),
+    );
+
+  return rows.map((r) => ({
+    id: r.id,
+    content: describeRecord(r.type, r.data as Record<string, unknown>, isoDate),
+    source: "record",
+    distance: 0,
+  }));
 }
