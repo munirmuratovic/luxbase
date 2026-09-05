@@ -15,6 +15,13 @@
       "when": 1788638081165,
       "tag": "0001_glossy_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788640187356,
+      "tag": "0002_clear_caretaker",
+      "breakpoints": true
     }
   ]
 }
