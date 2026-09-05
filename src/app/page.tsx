@@ -65,12 +65,12 @@ type RecordRow = {
 };
 
 const STAGE_LABEL: Record<StepEvent["stage"], string> = {
-  retrieve: "Retrieve",
-  judge: "Judge",
-  extract_records: "Extract records",
-  save: "Save",
-  generate: "Generate",
-  delete: "Delete",
+  retrieve: "Looking up context",
+  judge: "Checking what to remember",
+  extract_records: "Reading your experience",
+  save: "Saving",
+  generate: "Writing a reply",
+  delete: "Removing",
 };
 
 type TableKind = "memories" | "records" | "documents";
@@ -87,6 +87,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const [steps, setSteps] = useState<StepEvent[]>([]);
+  const [showTrace, setShowTrace] = useState(false);
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [memoryRows, setMemoryRows] = useState<MemoryRow[]>([]);
   const [recordRows, setRecordRows] = useState<RecordRow[]>([]);
@@ -151,6 +152,7 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setAsking(true);
     setSteps([]);
+    setShowTrace(false);
 
     try {
       const res = await fetch("/api/rag/chat", {
@@ -223,11 +225,8 @@ export default function Home() {
   };
 
   const lastStep = steps[steps.length - 1];
-  const currentStageLabel = lastStep
-    ? lastStep.status === "start"
-      ? STAGE_LABEL[lastStep.stage]
-      : `${STAGE_LABEL[lastStep.stage]} done`
-    : "Starting";
+  const currentStageLabel = lastStep ? STAGE_LABEL[lastStep.stage] : "Thinking";
+  const completedSteps = steps.filter((s) => s.status === "done");
 
   return (
     <div className="min-h-full flex-1 bg-background font-sans text-foreground">
@@ -250,18 +249,9 @@ export default function Home() {
                 Luxbase
               </h1>
               <p className="mt-0.5 text-xs text-muted">
-                Local memory · pgvector + Ollama
+                Remembers what matters, runs entirely on this machine
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-muted shadow-sm ring-1 ring-border">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-            </span>
-            <span className="text-foreground">On-device</span>
-            <span className="opacity-50">·</span>
-            No cloud calls
           </div>
         </header>
 
@@ -303,11 +293,11 @@ export default function Home() {
                       </div>
 
                       {m.remembered && m.remembered.length > 0 && (
-                        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent">
-                          <span aria-hidden>◆</span>
-                          <span className="font-mono font-normal">
-                            {m.remembered.join(" · ")}
+                        <p className="mt-2 flex items-start gap-1.5 px-1 text-xs text-muted">
+                          <span aria-hidden className="text-accent">
+                            ◆
                           </span>
+                          <span>{m.remembered.join(" · ")}</span>
                         </p>
                       )}
 
@@ -317,15 +307,9 @@ export default function Home() {
                             {m.sources.length} source
                             {m.sources.length === 1 ? "" : "s"}
                           </summary>
-                          <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-border pl-3 font-mono">
+                          <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-border pl-3">
                             {m.sources.map((s) => (
-                              <li key={s.id} className="tabular-nums">
-                                <span className="text-accent">
-                                  {s.distance.toFixed(3)}
-                                </span>{" "}
-                                <span className="text-muted">
-                                  [{s.source ?? "untitled"}]
-                                </span>{" "}
+                              <li key={s.id}>
                                 {s.content.slice(0, 90)}
                                 {s.content.length > 90 ? "…" : ""}
                               </li>
@@ -336,15 +320,38 @@ export default function Home() {
                     </div>
                   ))}
                   {asking && (
-                    <div className="mr-auto max-w-[85%] animate-[fadeIn_0.2s_ease-out]">
+                    <div className="mr-auto flex max-w-[85%] flex-col gap-1.5 animate-[fadeIn_0.2s_ease-out]">
                       <div className="flex items-center gap-2.5 rounded-2xl rounded-bl-md bg-surface-sunken px-4 py-2.5 text-sm text-muted">
                         <span className="flex gap-1">
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
-                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted" />
                         </span>
-                        <span className="text-xs">{currentStageLabel}</span>
+                        <span className="text-xs">{currentStageLabel}…</span>
                       </div>
+                      {completedSteps.length > 0 && (
+                        <button
+                          onClick={() => setShowTrace((v) => !v)}
+                          className="px-1 text-left text-[11px] text-muted underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        >
+                          {showTrace ? "Hide details" : "Show details"}
+                        </button>
+                      )}
+                      {showTrace && (
+                        <ul className="flex flex-col gap-1 px-1 text-[11px] text-muted">
+                          {completedSteps.map((s, i) => (
+                            <li key={i} className="flex items-baseline gap-1.5">
+                              <span className="text-accent">✓</span>
+                              <span>{STAGE_LABEL[s.stage]}</span>
+                              {s.ms !== undefined && (
+                                <span className="tabular-nums opacity-70">
+                                  {s.ms}ms
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   )}
                   <div ref={logEndRef} />
@@ -373,236 +380,136 @@ export default function Home() {
             </div>
           </section>
 
-          {/* System state */}
-          <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto">
-            <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-border">
-              <h2 className="mb-4 flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.15em] text-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                Pipeline
-              </h2>
-              {steps.length === 0 ? (
-                <p className="text-xs text-muted">
-                  {asking ? "Starting…" : "Waiting for a message."}
-                </p>
-              ) : (
-                <ol className="relative flex flex-col gap-3.5 border-l-2 border-border pl-4">
-                  {steps
-                    .filter((s) => s.status === "done")
-                    .map((s, i) => (
-                      <li key={i} className="relative">
-                        <span
-                          className={
-                            "absolute -left-[1.15rem] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-surface " +
-                            (s.stage === "delete" ? "bg-danger" : "bg-accent")
-                          }
-                        />
-                        <div className="flex items-baseline justify-between gap-2 text-xs">
-                          <span className="font-medium">
-                            {STAGE_LABEL[s.stage]}
-                          </span>
-                          {s.ms !== undefined && (
-                            <span className="font-mono tabular-nums text-muted">
-                              {s.ms}ms
-                            </span>
-                          )}
-                        </div>
-
-                        {s.stage === "retrieve" && s.sources && (
-                          <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] text-muted">
-                            {s.sources.slice(0, 4).map((src) => (
-                              <li key={src.id} className="tabular-nums">
-                                {src.distance.toFixed(3)}{" "}
-                                {src.content.slice(0, 42)}
-                                {src.content.length > 42 ? "…" : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-
-                        {s.stage === "judge" && s.judgement && (
-                          <div className="mt-1 text-[11px] text-muted">
-                            {s.judgement.facts.length > 0 ? (
-                              <ul className="flex flex-col gap-0.5 font-mono">
-                                {s.judgement.facts.map((f, fi) => (
-                                  <li key={fi}>
-                                    {f.subject}.{f.attribute} = &ldquo;
-                                    {f.value}&rdquo;
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <span>nothing worth saving</span>
-                            )}
-                          </div>
-                        )}
-
-                        {s.stage === "extract_records" && s.records && (
-                          <p className="mt-1 text-[11px] text-muted">
-                            {s.records.length} record
-                            {s.records.length === 1 ? "" : "s"} found
-                          </p>
-                        )}
-
-                        {s.stage === "delete" && (
-                          <p className="mt-1 text-[11px] text-muted">
-                            {s.target
-                              ? s.target.kind === "memory"
-                                ? `${s.target.subject}.${s.target.attribute}`
-                                : s.target.description
-                              : "no match found"}
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                  {lastStep?.status === "start" && (
-                    <li className="relative">
-                      <span className="absolute -left-[1.15rem] top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-accent ring-4 ring-surface" />
-                      <span className="text-xs font-medium text-accent">
-                        {STAGE_LABEL[lastStep.stage]}…
+          {/* Stored data */}
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as TableKind)}
+            className="flex min-h-0 flex-col rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-border"
+          >
+            <div className="mb-4 flex items-center gap-1.5">
+              <TabsList className="rounded-full bg-surface-sunken p-1">
+                {(["memories", "records", "documents"] as TableKind[]).map(
+                  (tab) => (
+                    <TabsTab key={tab} value={tab}>
+                      {tab}
+                      <span className="ml-1 text-[10px] tabular-nums opacity-70">
+                        {tabCount[tab]}
                       </span>
-                    </li>
-                  )}
-                </ol>
+                    </TabsTab>
+                  ),
+                )}
+              </TabsList>
+              {docsLoading && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted" />
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => clearTable(activeTab)}
+                disabled={tabCount[activeTab] === 0}
+                className="ml-auto h-auto rounded-md px-2 py-1 font-normal hover:text-danger"
+              >
+                Clear
+              </Button>
             </div>
 
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as TableKind)}
-              className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-border"
-            >
-              <div className="mb-4 flex items-center gap-1.5">
-                <TabsList className="rounded-full bg-surface-sunken p-1">
-                  {(["memories", "records", "documents"] as TableKind[]).map(
-                    (tab) => (
-                      <TabsTab key={tab} value={tab}>
-                        {tab}
-                        <span className="ml-1 font-mono text-[10px] tabular-nums opacity-70">
-                          {tabCount[tab]}
-                        </span>
-                      </TabsTab>
-                    ),
-                  )}
-                </TabsList>
-                {docsLoading && (
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+            <TabsPanel value="memories" className="overflow-y-auto">
+              <ul className="flex flex-col gap-0.5">
+                {memoryRows.length === 0 && (
+                  <li className="py-1 text-xs text-muted">No memories yet.</li>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => clearTable(activeTab)}
-                  disabled={tabCount[activeTab] === 0}
-                  className="ml-auto h-auto rounded-md px-2 py-1 font-normal hover:text-danger"
-                >
-                  Clear
-                </Button>
-              </div>
-
-              <TabsPanel value="memories" className="overflow-y-auto">
-                <ul className="flex flex-col gap-0.5">
-                  {memoryRows.length === 0 && (
-                    <li className="py-1 text-xs text-muted">
-                      No memories yet.
-                    </li>
-                  )}
-                  {memoryRows.map((m) => (
-                    <li
-                      key={m.id}
-                      className="group flex items-start justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                {memoryRows.map((m) => (
+                  <li
+                    key={m.id}
+                    className="group flex items-start justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                  >
+                    <p className="text-sm leading-snug">
+                      <span className="capitalize">
+                        {m.attribute.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-muted">: </span>
+                      <span>{m.value}</span>
+                    </p>
+                    <button
+                      onClick={() => deleteRow("memories", m.id)}
+                      aria-label="Delete memory"
+                      className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                     >
-                      <p className="text-xs leading-snug">
-                        <span className="font-mono text-muted">
-                          {m.subject}.{m.attribute}
-                        </span>{" "}
-                        <span>{m.value}</span>
-                      </p>
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </TabsPanel>
+
+            <TabsPanel value="records" className="overflow-y-auto">
+              <ul className="flex flex-col gap-1.5">
+                {recordRows.length === 0 && (
+                  <li className="py-1 text-xs text-muted">No records yet.</li>
+                )}
+                {recordRows.map((r) => (
+                  <li
+                    key={r.id}
+                    className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {String((r.data as { title?: string }).title ?? r.type)}
+                          {(r.data as { company?: string }).company && (
+                            <span className="font-normal text-muted">
+                              {" "}
+                              at {(r.data as { company?: string }).company}
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-muted">
+                          {r.startDate ?? "?"} – {r.endDate ?? "present"}
+                        </p>
+                      </div>
                       <button
-                        onClick={() => deleteRow("memories", m.id)}
-                        aria-label="Delete memory"
+                        onClick={() => deleteRow("records", r.id)}
+                        aria-label="Delete record"
                         className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       >
                         ✕
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              </TabsPanel>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </TabsPanel>
 
-              <TabsPanel value="records" className="overflow-y-auto">
-                <ul className="flex flex-col gap-1.5">
-                  {recordRows.length === 0 && (
-                    <li className="py-1 text-xs text-muted">
-                      No records yet.
-                    </li>
-                  )}
-                  {recordRows.map((r) => (
-                    <li
-                      key={r.id}
-                      className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium">
-                            {String(
-                              (r.data as { title?: string }).title ?? r.type,
-                            )}
-                            {(r.data as { company?: string }).company && (
-                              <span className="font-normal text-muted">
-                                {" "}
-                                · {(r.data as { company?: string }).company}
-                              </span>
-                            )}
-                          </p>
-                          <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted">
-                            {r.startDate ?? "?"} – {r.endDate ?? "present"}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => deleteRow("records", r.id)}
-                          aria-label="Delete record"
-                          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </TabsPanel>
-
-              <TabsPanel value="documents" className="overflow-y-auto">
-                <ul className="flex flex-col gap-1.5">
-                  {docs.length === 0 && (
-                    <li className="py-1 text-xs text-muted">
-                      No documents yet.
-                    </li>
-                  )}
-                  {docs.map((d) => (
-                    <li
-                      key={d.id}
-                      className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 flex-1 truncate text-xs text-foreground">
-                          {d.content.slice(0, 90)}
-                        </p>
-                        <button
-                          onClick={() => deleteRow("documents", d.id)}
-                          aria-label="Delete document"
-                          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <p className="font-mono text-[11px] text-muted">
-                        {d.source ?? "untitled"} · {fmtTime(d.createdAt)}
+            <TabsPanel value="documents" className="overflow-y-auto">
+              <ul className="flex flex-col gap-1.5">
+                {docs.length === 0 && (
+                  <li className="py-1 text-xs text-muted">No documents yet.</li>
+                )}
+                {docs.map((d) => (
+                  <li
+                    key={d.id}
+                    className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm text-foreground">
+                        {d.content.slice(0, 90)}
                       </p>
-                    </li>
-                  ))}
-                </ul>
-              </TabsPanel>
-            </Tabs>
-          </aside>
+                      <button
+                        onClick={() => deleteRow("documents", d.id)}
+                        aria-label="Delete document"
+                        className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted">
+                      {d.source ?? "untitled"} · {fmtTime(d.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </TabsPanel>
+          </Tabs>
         </main>
       </div>
     </div>
