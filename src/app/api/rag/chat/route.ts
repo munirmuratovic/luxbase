@@ -8,9 +8,12 @@ import {
   resolveDeleteTarget,
 } from "@/rag/delete-intent";
 import { generateAnswer } from "@/rag/generate";
+import type { HistoryTurn } from "@/rag/history";
 import {
   deleteMemoryFact,
+  deleteRecord,
   listAllMemories,
+  listAllRecords,
   saveMemoryFact,
   saveRecord,
 } from "@/rag/ingest";
@@ -24,11 +27,16 @@ function sseEvent(event: string, data: unknown) {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { message } = body as { message?: string };
+  const { message, history } = body as {
+    message?: string;
+    history?: HistoryTurn[];
+  };
 
   if (!message || typeof message !== "string") {
     return Response.json({ error: "message is required" }, { status: 400 });
   }
+
+  const recentHistory = Array.isArray(history) ? history : [];
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -39,11 +47,27 @@ export async function POST(request: Request) {
         if (looksLikeDeleteIntent(message)) {
           enqueue("step", { stage: "delete", status: "start" });
           const deleteStart = Date.now();
-          const existing = await listAllMemories();
-          const target = await resolveDeleteTarget(message, existing);
+          const [existingMemories, existingRecords] = await Promise.all([
+            listAllMemories(),
+            listAllRecords(),
+          ]);
+          const target = await resolveDeleteTarget(
+            message,
+            existingMemories,
+            existingRecords.map((r) => ({
+              id: r.id,
+              type: r.type,
+              data: r.data as Record<string, unknown>,
+            })),
+          );
 
-          if (target) {
+          let answer = "I couldn't find a matching item to delete.";
+          if (target?.kind === "memory") {
             await deleteMemoryFact(target.subject, target.attribute);
+            answer = `Forgot ${target.subject}.${target.attribute}.`;
+          } else if (target?.kind === "record") {
+            await deleteRecord(target.id);
+            answer = `Deleted record: ${target.description}.`;
           }
 
           enqueue("step", {
@@ -53,13 +77,7 @@ export async function POST(request: Request) {
             target,
           });
 
-          enqueue("final", {
-            answer: target
-              ? `Forgot ${target.subject}.${target.attribute}.`
-              : "I couldn't find a matching memory to delete.",
-            sources: [],
-            remembered: null,
-          });
+          enqueue("final", { answer, sources: [], remembered: null });
           return;
         }
 
@@ -114,7 +132,12 @@ export async function POST(request: Request) {
         } else {
           enqueue("step", { stage: "judge", status: "start" });
           const judgeStart = Date.now();
-          const judgement = await judgeForMemory(message);
+          const existingMemories = await listAllMemories();
+          const judgement = await judgeForMemory(
+            message,
+            recentHistory,
+            existingMemories,
+          );
           enqueue("step", {
             stage: "judge",
             status: "done",
@@ -145,6 +168,7 @@ export async function POST(request: Request) {
         const answer = await generateAnswer(
           message,
           chunks.map((c) => c.content),
+          recentHistory,
         );
         enqueue("step", {
           stage: "generate",

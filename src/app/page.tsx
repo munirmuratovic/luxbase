@@ -35,7 +35,10 @@ type StepEvent = {
   judgement?: { shouldSave: boolean; facts: MemoryFact[] };
   facts?: MemoryFact[];
   records?: ExtractedRecord[];
-  target?: { subject: string; attribute: string } | null;
+  target?:
+    | { kind: "memory"; subject: string; attribute: string }
+    | { kind: "record"; id: string; description: string }
+    | null;
 };
 
 type DocRow = {
@@ -140,6 +143,10 @@ export default function Home() {
   async function handleSend() {
     if (!input.trim()) return;
     const text = input;
+    const history = messages.slice(-6).map((m) => ({
+      role: m.role,
+      text: m.text,
+    }));
     setInput("");
     setMessages((prev) => [...prev, { role: "user", text }]);
     setAsking(true);
@@ -149,7 +156,7 @@ export default function Home() {
       const res = await fetch("/api/rag/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history }),
       });
       if (!res.body) throw new Error("No response stream");
 
@@ -439,7 +446,9 @@ export default function Home() {
                         {s.stage === "delete" && (
                           <p className="mt-1 text-[11px] text-muted">
                             {s.target
-                              ? `${s.target.subject}.${s.target.attribute}`
+                              ? s.target.kind === "memory"
+                                ? `${s.target.subject}.${s.target.attribute}`
+                                : s.target.description
                               : "no match found"}
                           </p>
                         )}

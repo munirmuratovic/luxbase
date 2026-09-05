@@ -45,9 +45,43 @@ export async function saveMemoryFact(fact: MemoryFact) {
     });
 }
 
+function recordIdentityKey(type: string, data: Record<string, unknown>) {
+  if (type === "work_experience") {
+    const company = String(data.company ?? "").toLowerCase().trim();
+    const title = String(data.title ?? "").toLowerCase().trim();
+    return `${type}:${company}:${title}`;
+  }
+  return null;
+}
+
 export async function saveRecord(record: ExtractedRecord) {
   const text = `${record.type}: ${JSON.stringify(record.data)}`;
   const vector = await embed(text);
+
+  const identityKey = recordIdentityKey(record.type, record.data);
+  if (identityKey) {
+    const existing = await db
+      .select({ id: records.id, type: records.type, data: records.data })
+      .from(records)
+      .where(eq(records.type, record.type));
+
+    const match = existing.find(
+      (r) => recordIdentityKey(r.type, r.data as Record<string, unknown>) === identityKey,
+    );
+
+    if (match) {
+      await db
+        .update(records)
+        .set({
+          startDate: record.startDate,
+          endDate: record.endDate,
+          data: record.data,
+          embedding: vector,
+        })
+        .where(eq(records.id, match.id));
+      return;
+    }
+  }
 
   await db.insert(records).values({
     type: record.type,
@@ -56,6 +90,22 @@ export async function saveRecord(record: ExtractedRecord) {
     data: record.data,
     embedding: vector,
   });
+}
+
+export async function listAllRecords() {
+  return db
+    .select({
+      id: records.id,
+      type: records.type,
+      startDate: records.startDate,
+      endDate: records.endDate,
+      data: records.data,
+    })
+    .from(records);
+}
+
+export async function deleteRecord(id: string) {
+  await db.delete(records).where(eq(records.id, id));
 }
 
 export async function listAllMemories() {
