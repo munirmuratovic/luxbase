@@ -26,13 +26,14 @@ type ExtractedRecord = {
 };
 
 type StepEvent = {
-  stage: "retrieve" | "judge" | "save" | "generate" | "extract_records";
+  stage: "retrieve" | "judge" | "save" | "generate" | "extract_records" | "delete";
   status: "start" | "done";
   ms?: number;
   sources?: Source[];
   judgement?: { shouldSave: boolean; facts: MemoryFact[] };
   facts?: MemoryFact[];
   records?: ExtractedRecord[];
+  target?: { subject: string; attribute: string } | null;
 };
 
 type DocRow = {
@@ -64,6 +65,7 @@ const STAGE_LABEL: Record<StepEvent["stage"], string> = {
   extract_records: "Extracting structured records",
   save: "Saving to memory",
   generate: "Generating answer",
+  delete: "Resolving delete request",
 };
 
 export default function RagPage() {
@@ -97,6 +99,25 @@ export default function RagPage() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
+
+  async function deleteRow(table: "documents" | "memories" | "records", id: string) {
+    await fetch("/api/rag/manage", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table, id }),
+    });
+    loadDocs();
+  }
+
+  async function clearTable(table: "documents" | "memories" | "records") {
+    if (!confirm(`Delete all rows in ${table}?`)) return;
+    await fetch("/api/rag/manage", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table }),
+    });
+    loadDocs();
+  }
 
   async function handleSend() {
     if (!input.trim()) return;
@@ -292,6 +313,13 @@ export default function RagPage() {
                       Saved {s.records.length} record(s)
                     </p>
                   )}
+                  {s.stage === "delete" && (
+                    <p className="ml-4 mt-1 text-zinc-500">
+                      {s.target
+                        ? `Target: ${s.target.subject}.${s.target.attribute}`
+                        : "No matching memory found"}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -302,13 +330,22 @@ export default function RagPage() {
               <h2 className="text-sm font-medium text-black dark:text-zinc-50">
                 Memories ({memoryRows.length})
               </h2>
-              <button
-                className="text-xs text-zinc-500 underline"
-                onClick={loadDocs}
-                disabled={docsLoading}
-              >
-                {docsLoading ? "..." : "refresh"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="text-xs text-zinc-500 underline"
+                  onClick={loadDocs}
+                  disabled={docsLoading}
+                >
+                  {docsLoading ? "..." : "refresh"}
+                </button>
+                <button
+                  className="text-xs text-red-500 underline"
+                  onClick={() => clearTable("memories")}
+                  disabled={memoryRows.length === 0}
+                >
+                  clear all
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -316,7 +353,8 @@ export default function RagPage() {
                   <tr className="text-zinc-500">
                     <th className="pr-2 pb-1 font-medium">Subject</th>
                     <th className="pr-2 pb-1 font-medium">Attribute</th>
-                    <th className="pb-1 font-medium">Value</th>
+                    <th className="pr-2 pb-1 font-medium">Value</th>
+                    <th className="pb-1 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -329,8 +367,17 @@ export default function RagPage() {
                       <td className="py-1 pr-2 text-zinc-500">
                         {m.attribute}
                       </td>
-                      <td className="py-1 text-black dark:text-zinc-50">
+                      <td className="py-1 pr-2 text-black dark:text-zinc-50">
                         {m.value}
+                      </td>
+                      <td className="py-1">
+                        <button
+                          className="text-zinc-400 hover:text-red-500"
+                          onClick={() => deleteRow("memories", m.id)}
+                          aria-label="Delete"
+                        >
+                          ✕
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -344,13 +391,22 @@ export default function RagPage() {
               <h2 className="text-sm font-medium text-black dark:text-zinc-50">
                 Records ({recordRows.length})
               </h2>
-              <button
-                className="text-xs text-zinc-500 underline"
-                onClick={loadDocs}
-                disabled={docsLoading}
-              >
-                {docsLoading ? "..." : "refresh"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="text-xs text-zinc-500 underline"
+                  onClick={loadDocs}
+                  disabled={docsLoading}
+                >
+                  {docsLoading ? "..." : "refresh"}
+                </button>
+                <button
+                  className="text-xs text-red-500 underline"
+                  onClick={() => clearTable("records")}
+                  disabled={recordRows.length === 0}
+                >
+                  clear all
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -359,7 +415,8 @@ export default function RagPage() {
                     <th className="pr-2 pb-1 font-medium">Type</th>
                     <th className="pr-2 pb-1 font-medium">Start</th>
                     <th className="pr-2 pb-1 font-medium">End</th>
-                    <th className="pb-1 font-medium">Data</th>
+                    <th className="pr-2 pb-1 font-medium">Data</th>
+                    <th className="pb-1 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -375,8 +432,17 @@ export default function RagPage() {
                       <td className="py-1 pr-2 text-zinc-500">
                         {r.endDate ?? "present"}
                       </td>
-                      <td className="py-1 text-black dark:text-zinc-50">
+                      <td className="py-1 pr-2 text-black dark:text-zinc-50">
                         {JSON.stringify(r.data)}
+                      </td>
+                      <td className="py-1">
+                        <button
+                          className="text-zinc-400 hover:text-red-500"
+                          onClick={() => deleteRow("records", r.id)}
+                          aria-label="Delete"
+                        >
+                          ✕
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -390,13 +456,22 @@ export default function RagPage() {
               <h2 className="text-sm font-medium text-black dark:text-zinc-50">
                 Stored documents ({docs.length})
               </h2>
-              <button
-                className="text-xs text-zinc-500 underline"
-                onClick={loadDocs}
-                disabled={docsLoading}
-              >
-                {docsLoading ? "..." : "refresh"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="text-xs text-zinc-500 underline"
+                  onClick={loadDocs}
+                  disabled={docsLoading}
+                >
+                  {docsLoading ? "..." : "refresh"}
+                </button>
+                <button
+                  className="text-xs text-red-500 underline"
+                  onClick={() => clearTable("documents")}
+                  disabled={docs.length === 0}
+                >
+                  clear all
+                </button>
+              </div>
             </div>
             <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto text-xs">
               {docs.map((d) => (
@@ -404,10 +479,19 @@ export default function RagPage() {
                   key={d.id}
                   className="rounded border border-black/[.06] p-2 dark:border-white/[.1]"
                 >
-                  <p className="text-zinc-500">
-                    {d.source ?? "untitled"} —{" "}
-                    {new Date(d.createdAt).toLocaleTimeString()}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-zinc-500">
+                      {d.source ?? "untitled"} —{" "}
+                      {new Date(d.createdAt).toLocaleTimeString()}
+                    </p>
+                    <button
+                      className="shrink-0 text-zinc-400 hover:text-red-500"
+                      onClick={() => deleteRow("documents", d.id)}
+                      aria-label="Delete"
+                    >
+                      ✕
+                    </button>
+                  </div>
                   <p className="text-black dark:text-zinc-50">
                     {d.content.slice(0, 140)}...
                   </p>

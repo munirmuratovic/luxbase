@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, memories, records } from "@/db/schema";
 import { chunkText } from "./chunk";
@@ -56,4 +56,22 @@ export async function saveRecord(record: ExtractedRecord) {
     data: record.data,
     embedding: vector,
   });
+}
+
+export async function listAllMemories() {
+  return db
+    .select({
+      subject: memories.subject,
+      attribute: memories.attribute,
+      value: memories.value,
+    })
+    .from(memories);
+}
+
+export async function deleteMemoryFact(subject: string, attribute: string) {
+  await db
+    .delete(memories)
+    .where(
+      and(eq(memories.subject, subject), eq(memories.attribute, attribute)),
+    );
 }

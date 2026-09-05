@@ -3,8 +3,17 @@ import {
   looksLikeStructuredPaste,
   mightReferenceDate,
 } from "@/rag/date-query";
+import {
+  looksLikeDeleteIntent,
+  resolveDeleteTarget,
+} from "@/rag/delete-intent";
 import { generateAnswer } from "@/rag/generate";
-import { saveMemoryFact, saveRecord } from "@/rag/ingest";
+import {
+  deleteMemoryFact,
+  listAllMemories,
+  saveMemoryFact,
+  saveRecord,
+} from "@/rag/ingest";
 import { judgeForMemory } from "@/rag/memory";
 import { extractRecords } from "@/rag/records";
 import { queryRecordsByDate, retrieve } from "@/rag/retrieve";
@@ -27,6 +36,33 @@ export async function POST(request: Request) {
         controller.enqueue(new TextEncoder().encode(sseEvent(event, data)));
 
       try {
+        if (looksLikeDeleteIntent(message)) {
+          enqueue("step", { stage: "delete", status: "start" });
+          const deleteStart = Date.now();
+          const existing = await listAllMemories();
+          const target = await resolveDeleteTarget(message, existing);
+
+          if (target) {
+            await deleteMemoryFact(target.subject, target.attribute);
+          }
+
+          enqueue("step", {
+            stage: "delete",
+            status: "done",
+            ms: Date.now() - deleteStart,
+            target,
+          });
+
+          enqueue("final", {
+            answer: target
+              ? `Forgot ${target.subject}.${target.attribute}.`
+              : "I couldn't find a matching memory to delete.",
+            sources: [],
+            remembered: null,
+          });
+          return;
+        }
+
         enqueue("step", { stage: "retrieve", status: "start" });
         const retrieveStart = Date.now();
         let chunks = await retrieve(message);
