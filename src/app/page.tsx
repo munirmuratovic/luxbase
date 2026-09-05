@@ -1,69 +1,601 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
+
+type Source = {
+  id: string;
+  content: string;
+  source: string | null;
+  distance: number;
+};
+
+type Message = {
+  role: "user" | "assistant";
+  text: string;
+  sources?: Source[];
+  remembered?: string[] | null;
+};
+
+type MemoryFact = { subject: string; attribute: string; value: string };
+
+type ExtractedRecord = {
+  type: string;
+  startDate: string | null;
+  endDate: string | null;
+  data: Record<string, unknown>;
+};
+
+type StepEvent = {
+  stage: "retrieve" | "judge" | "save" | "generate" | "extract_records" | "delete";
+  status: "start" | "done";
+  ms?: number;
+  sources?: Source[];
+  judgement?: { shouldSave: boolean; facts: MemoryFact[] };
+  facts?: MemoryFact[];
+  records?: ExtractedRecord[];
+  target?: { subject: string; attribute: string } | null;
+};
+
+type DocRow = {
+  id: string;
+  content: string;
+  source: string | null;
+  createdAt: string;
+};
+
+type MemoryRow = {
+  id: string;
+  subject: string;
+  attribute: string;
+  value: string;
+  updatedAt: string;
+};
+
+type RecordRow = {
+  id: string;
+  type: string;
+  startDate: string | null;
+  endDate: string | null;
+  data: Record<string, unknown>;
+};
+
+const STAGE_LABEL: Record<StepEvent["stage"], string> = {
+  retrieve: "Retrieve",
+  judge: "Judge",
+  extract_records: "Extract records",
+  save: "Save",
+  generate: "Generate",
+  delete: "Delete",
+};
+
+type TableKind = "memories" | "records" | "documents";
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [steps, setSteps] = useState<StepEvent[]>([]);
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [memoryRows, setMemoryRows] = useState<MemoryRow[]>([]);
+  const [recordRows, setRecordRows] = useState<RecordRow[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TableKind>("memories");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  async function loadDocs() {
+    setDocsLoading(true);
+    try {
+      const res = await fetch("/api/rag/documents");
+      const data = await res.json();
+      setDocs(data.documents ?? []);
+      setMemoryRows(data.memories ?? []);
+      setRecordRows(data.records ?? []);
+    } finally {
+      setDocsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadDocs();
+    pollRef.current = setInterval(loadDocs, 5000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [messages, asking, steps]);
+
+  async function deleteRow(table: TableKind, id: string) {
+    await fetch("/api/rag/manage", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table, id }),
+    });
+    loadDocs();
+  }
+
+  async function clearTable(table: TableKind) {
+    if (!confirm(`Delete all rows in ${table}?`)) return;
+    await fetch("/api/rag/manage", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table }),
+    });
+    loadDocs();
+  }
+
+  async function handleSend() {
+    if (!input.trim()) return;
+    const text = input;
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setAsking(true);
+    setSteps([]);
+
+    try {
+      const res = await fetch("/api/rag/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!res.body) throw new Error("No response stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const raw of events) {
+          const eventMatch = raw.match(/^event: (.+)$/m);
+          const dataMatch = raw.match(/^data: (.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+          const event = eventMatch[1];
+          const data = JSON.parse(dataMatch[1]);
+
+          if (event === "step") {
+            setSteps((prev) => [...prev, data as StepEvent]);
+            if (data.stage === "save" && data.status === "done") {
+              loadDocs();
+            }
+          } else if (event === "final") {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                text: data.answer,
+                sources: data.sources,
+                remembered: data.remembered,
+              },
+            ]);
+          } else if (event === "error") {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", text: `Error: ${data.message}` },
+            ]);
+          }
+        }
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: err instanceof Error ? err.message : "Chat failed",
+        },
+      ]);
+    } finally {
+      setAsking(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  const tabCount: Record<TableKind, number> = {
+    memories: memoryRows.length,
+    records: recordRows.length,
+    documents: docs.length,
+  };
+
+  const lastStep = steps[steps.length - 1];
+  const currentStageLabel = lastStep
+    ? lastStep.status === "start"
+      ? STAGE_LABEL[lastStep.stage]
+      : `${STAGE_LABEL[lastStep.stage]} done`
+    : "Starting";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-full flex-1 bg-background font-sans text-foreground">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-6 lg:h-screen lg:py-8">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent">
+              <span
+                className="text-lg font-bold leading-none text-on-accent"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                L
+              </span>
+            </div>
+            <div>
+              <h1
+                className="text-xl font-bold leading-none tracking-tight"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Luxbase
+              </h1>
+              <p className="mt-0.5 text-xs text-muted">
+                Local memory · pgvector + Ollama
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-muted shadow-sm ring-1 ring-border">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+            </span>
+            <span className="text-foreground">On-device</span>
+            <span className="opacity-50">·</span>
+            No cloud calls
+          </div>
+        </header>
+
+        <main className="grid flex-1 grid-cols-1 gap-5 overflow-hidden lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+          {/* Conversation */}
+          <section className="flex min-h-0 flex-col rounded-2xl bg-surface shadow-sm ring-1 ring-border">
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {messages.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-2xl">
+                    💬
+                  </div>
+                  <p className="max-w-xs text-sm text-muted">
+                    Say something. Facts worth remembering are saved
+                    automatically — nothing to configure.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {messages.map((m, i) => (
+                    <div
+                      key={i}
+                      className={
+                        m.role === "user"
+                          ? "ml-auto max-w-[85%] animate-[fadeIn_0.2s_ease-out]"
+                          : "mr-auto max-w-[85%] animate-[fadeIn_0.2s_ease-out]"
+                      }
+                    >
+                      <div
+                        className={
+                          m.role === "user"
+                            ? "rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm text-on-accent shadow-sm"
+                            : "rounded-2xl rounded-bl-md bg-surface-sunken px-4 py-2.5 text-sm text-foreground"
+                        }
+                      >
+                        <p className="whitespace-pre-wrap leading-relaxed">
+                          {m.text}
+                        </p>
+                      </div>
+
+                      {m.remembered && m.remembered.length > 0 && (
+                        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent">
+                          <span aria-hidden>◆</span>
+                          <span className="font-mono font-normal">
+                            {m.remembered.join(" · ")}
+                          </span>
+                        </p>
+                      )}
+
+                      {m.sources && m.sources.length > 0 && (
+                        <details className="mt-2 px-1 text-xs text-muted">
+                          <summary className="cursor-pointer select-none transition-colors hover:text-foreground">
+                            {m.sources.length} source
+                            {m.sources.length === 1 ? "" : "s"}
+                          </summary>
+                          <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-border pl-3 font-mono">
+                            {m.sources.map((s) => (
+                              <li key={s.id} className="tabular-nums">
+                                <span className="text-accent">
+                                  {s.distance.toFixed(3)}
+                                </span>{" "}
+                                <span className="text-muted">
+                                  [{s.source ?? "untitled"}]
+                                </span>{" "}
+                                {s.content.slice(0, 90)}
+                                {s.content.length > 90 ? "…" : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                  {asking && (
+                    <div className="mr-auto max-w-[85%] animate-[fadeIn_0.2s_ease-out]">
+                      <div className="flex items-center gap-2.5 rounded-2xl rounded-bl-md bg-surface-sunken px-4 py-2.5 text-sm text-muted">
+                        <span className="flex gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
+                        </span>
+                        <span className="text-xs">{currentStageLabel}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={logEndRef} />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 border-t border-border p-4">
+              <input
+                ref={inputRef}
+                className="flex-1 rounded-xl bg-surface-sunken px-4 py-3 text-sm outline-none ring-1 ring-transparent transition-shadow placeholder:text-muted focus:ring-2 focus:ring-accent"
+                placeholder="Say something…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSend();
+                }}
+              />
+              <Button
+                className="h-auto rounded-xl px-6 py-3"
+                disabled={asking || !input.trim()}
+                onClick={handleSend}
+              >
+                {asking ? "…" : "Send"}
+              </Button>
+            </div>
+          </section>
+
+          {/* System state */}
+          <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto">
+            <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-border">
+              <h2 className="mb-4 flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.15em] text-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                Pipeline
+              </h2>
+              {steps.length === 0 ? (
+                <p className="text-xs text-muted">
+                  {asking ? "Starting…" : "Waiting for a message."}
+                </p>
+              ) : (
+                <ol className="relative flex flex-col gap-3.5 border-l-2 border-border pl-4">
+                  {steps
+                    .filter((s) => s.status === "done")
+                    .map((s, i) => (
+                      <li key={i} className="relative">
+                        <span
+                          className={
+                            "absolute -left-[1.15rem] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-surface " +
+                            (s.stage === "delete" ? "bg-danger" : "bg-accent")
+                          }
+                        />
+                        <div className="flex items-baseline justify-between gap-2 text-xs">
+                          <span className="font-medium">
+                            {STAGE_LABEL[s.stage]}
+                          </span>
+                          {s.ms !== undefined && (
+                            <span className="font-mono tabular-nums text-muted">
+                              {s.ms}ms
+                            </span>
+                          )}
+                        </div>
+
+                        {s.stage === "retrieve" && s.sources && (
+                          <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] text-muted">
+                            {s.sources.slice(0, 4).map((src) => (
+                              <li key={src.id} className="tabular-nums">
+                                {src.distance.toFixed(3)}{" "}
+                                {src.content.slice(0, 42)}
+                                {src.content.length > 42 ? "…" : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {s.stage === "judge" && s.judgement && (
+                          <div className="mt-1 text-[11px] text-muted">
+                            {s.judgement.facts.length > 0 ? (
+                              <ul className="flex flex-col gap-0.5 font-mono">
+                                {s.judgement.facts.map((f, fi) => (
+                                  <li key={fi}>
+                                    {f.subject}.{f.attribute} = &ldquo;
+                                    {f.value}&rdquo;
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <span>nothing worth saving</span>
+                            )}
+                          </div>
+                        )}
+
+                        {s.stage === "extract_records" && s.records && (
+                          <p className="mt-1 text-[11px] text-muted">
+                            {s.records.length} record
+                            {s.records.length === 1 ? "" : "s"} found
+                          </p>
+                        )}
+
+                        {s.stage === "delete" && (
+                          <p className="mt-1 text-[11px] text-muted">
+                            {s.target
+                              ? `${s.target.subject}.${s.target.attribute}`
+                              : "no match found"}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  {lastStep?.status === "start" && (
+                    <li className="relative">
+                      <span className="absolute -left-[1.15rem] top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-accent ring-4 ring-surface" />
+                      <span className="text-xs font-medium text-accent">
+                        {STAGE_LABEL[lastStep.stage]}…
+                      </span>
+                    </li>
+                  )}
+                </ol>
+              )}
+            </div>
+
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as TableKind)}
+              className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-border"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+              <div className="mb-4 flex items-center gap-1.5">
+                <TabsList className="rounded-full bg-surface-sunken p-1">
+                  {(["memories", "records", "documents"] as TableKind[]).map(
+                    (tab) => (
+                      <TabsTab key={tab} value={tab}>
+                        {tab}
+                        <span className="ml-1 font-mono text-[10px] tabular-nums opacity-70">
+                          {tabCount[tab]}
+                        </span>
+                      </TabsTab>
+                    ),
+                  )}
+                </TabsList>
+                {docsLoading && (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => clearTable(activeTab)}
+                  disabled={tabCount[activeTab] === 0}
+                  className="ml-auto h-auto rounded-md px-2 py-1 font-normal hover:text-danger"
+                >
+                  Clear
+                </Button>
+              </div>
+
+              <TabsPanel value="memories" className="overflow-y-auto">
+                <ul className="flex flex-col gap-0.5">
+                  {memoryRows.length === 0 && (
+                    <li className="py-1 text-xs text-muted">
+                      No memories yet.
+                    </li>
+                  )}
+                  {memoryRows.map((m) => (
+                    <li
+                      key={m.id}
+                      className="group flex items-start justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                    >
+                      <p className="text-xs leading-snug">
+                        <span className="font-mono text-muted">
+                          {m.subject}.{m.attribute}
+                        </span>{" "}
+                        <span>{m.value}</span>
+                      </p>
+                      <button
+                        onClick={() => deleteRow("memories", m.id)}
+                        aria-label="Delete memory"
+                        className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
+
+              <TabsPanel value="records" className="overflow-y-auto">
+                <ul className="flex flex-col gap-1.5">
+                  {recordRows.length === 0 && (
+                    <li className="py-1 text-xs text-muted">
+                      No records yet.
+                    </li>
+                  )}
+                  {recordRows.map((r) => (
+                    <li
+                      key={r.id}
+                      className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium">
+                            {String(
+                              (r.data as { title?: string }).title ?? r.type,
+                            )}
+                            {(r.data as { company?: string }).company && (
+                              <span className="font-normal text-muted">
+                                {" "}
+                                · {(r.data as { company?: string }).company}
+                              </span>
+                            )}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted">
+                            {r.startDate ?? "?"} – {r.endDate ?? "present"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => deleteRow("records", r.id)}
+                          aria-label="Delete record"
+                          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
+
+              <TabsPanel value="documents" className="overflow-y-auto">
+                <ul className="flex flex-col gap-1.5">
+                  {docs.length === 0 && (
+                    <li className="py-1 text-xs text-muted">
+                      No documents yet.
+                    </li>
+                  )}
+                  {docs.map((d) => (
+                    <li
+                      key={d.id}
+                      className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-sunken"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 truncate text-xs text-foreground">
+                          {d.content.slice(0, 90)}
+                        </p>
+                        <button
+                          onClick={() => deleteRow("documents", d.id)}
+                          aria-label="Delete document"
+                          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="font-mono text-[11px] text-muted">
+                        {d.source ?? "untitled"} · {fmtTime(d.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </TabsPanel>
+            </Tabs>
+          </aside>
+        </main>
+      </div>
     </div>
   );
 }
