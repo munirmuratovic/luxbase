@@ -14,14 +14,25 @@ export async function generateAnswer(
 
   const historyBlock = formatHistory(history);
 
-  const prompt = `You are a helpful assistant. Use the context below to answer the question as directly as possible. Only say you don't know if the context truly has nothing relevant.
+  const isQuestion = /\?\s*$/.test(query.trim());
+
+  const prompt = isQuestion
+    ? `You are a helpful assistant. Answer the question using the context below as directly as possible. If the context has nothing relevant, say so plainly.
 
 Context:
 ${contextBlock}
 
-${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}Latest message: ${query}
+${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}Question: ${query}
 
-Answer:`;
+Answer:`
+    : `You are a helpful assistant having a casual conversation. React naturally to what the user just said — acknowledge it, comment on it, or continue the conversation. Use the background info below only if it's actually relevant.
+
+Background info:
+${contextBlock}
+
+${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}They just said: ${query}
+
+Your reply:`;
 
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: "POST",
