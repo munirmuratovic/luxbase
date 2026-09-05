@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { chunkText } from "./chunk";
-import { embedBatch } from "./embeddings";
+import { embed, embedBatch } from "./embeddings";
 
 export async function ingestDocument(content: string, source?: string) {
   const chunks = chunkText(content);
@@ -18,4 +18,9 @@ export async function ingestDocument(content: string, source?: string) {
   );
 
   return { chunksInserted: chunks.length };
+}
+
+export async function saveMemory(content: string, source = "chat-memory") {
+  const vector = await embed(content);
+  await db.insert(documents).values({ content, embedding: vector, source });
 }
