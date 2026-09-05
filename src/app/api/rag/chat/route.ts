@@ -10,6 +10,11 @@ import {
 import { generateAnswer } from "@/rag/generate";
 import type { HistoryTurn } from "@/rag/history";
 import {
+  addMessage,
+  createConversation,
+  renameConversationFromFirstMessage,
+} from "@/rag/conversations";
+import {
   deleteMemoryFact,
   deleteRecord,
   listAllMemories,
@@ -27,9 +32,10 @@ function sseEvent(event: string, data: unknown) {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { message, history } = body as {
+  const { message, history, conversationId: incomingConversationId } = body as {
     message?: string;
     history?: HistoryTurn[];
+    conversationId?: string;
   };
 
   if (!message || typeof message !== "string") {
@@ -43,7 +49,18 @@ export async function POST(request: Request) {
       const enqueue = (event: string, data: unknown) =>
         controller.enqueue(new TextEncoder().encode(sseEvent(event, data)));
 
+      let conversationId = incomingConversationId;
       try {
+        if (!conversationId) {
+          const conversation = await createConversation();
+          conversationId = conversation.id;
+          enqueue("conversation", { conversationId });
+        }
+        if (recentHistory.length === 0) {
+          await renameConversationFromFirstMessage(conversationId, message);
+        }
+        await addMessage(conversationId, { role: "user", text: message });
+
         if (looksLikeDeleteIntent(message)) {
           enqueue("step", { stage: "delete", status: "start" });
           const deleteStart = Date.now();
@@ -77,6 +94,7 @@ export async function POST(request: Request) {
             target,
           });
 
+          await addMessage(conversationId, { role: "assistant", text: answer });
           enqueue("final", { answer, sources: [], remembered: null });
           return;
         }
@@ -178,6 +196,13 @@ export async function POST(request: Request) {
           stage: "generate",
           status: "done",
           ms: Date.now() - generateStart,
+        });
+
+        await addMessage(conversationId, {
+          role: "assistant",
+          text: answer,
+          sources: chunks,
+          remembered: remembered.length > 0 ? remembered : null,
         });
 
         enqueue("final", {

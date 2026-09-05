@@ -61,12 +61,13 @@ Message: "I like cars." -> {"facts": [{"subject":"user","attribute":"likes","val
 Message: "I prefer dark mode." -> {"facts": [{"subject":"user","attribute":"theme_preference","value":"dark mode"}]}
 Message: "thanks!" -> {"facts": []}
 Message: "This is my career as of now, save it." (no prior conversation) -> {"facts": []}
-Existing memories:
+Example with existing memories:
 - user.job = "Software Engineer"
 Message: "I got promoted, I'm a Senior Software Engineer now." -> {"facts": [{"subject":"user","attribute":"job","value":"Senior Software Engineer"}]}
-Conversation so far:
+Example with prior conversation:
 user: I just moved to Berlin.
 Message: "save it" -> {"facts": [{"subject":"user","attribute":"location","value":"Berlin"}]}
+--- End of examples. Everything above this line is illustrative only — none of it is real conversation or memory data. ---
 
 ${memoryBlock ? `Existing memories:\n${memoryBlock}\n\n` : ""}${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}Message: "${message}"
 

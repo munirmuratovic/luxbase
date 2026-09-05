@@ -1,18 +1,20 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #f7f4ee;
+  --background: #f5f7f8;
   --surface: #ffffff;
-  --surface-sunken: #eeeae1;
-  --foreground: #17140f;
-  --muted: #726c60;
-  --border: #ddd6c8;
-  --accent: #6d28d9;
-  --accent-soft: #ece3fb;
+  --surface-sunken: #e9edef;
+  --foreground: #121a1f;
+  --muted: #5c6b74;
+  --border: #dbe2e5;
+  --accent: #1a7476;
+  --accent-2: #445b7c;
+  --accent-soft: #dcf0ef;
   --on-accent: #ffffff;
   --warn: #b8791a;
-  --danger: #c8341f;
+  --danger: #b8412b;
+  --ring: rgba(26, 116, 118, 0.26);
 }
 
 @theme inline {
@@ -23,58 +25,109 @@
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Inter", var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: "Space Grotesk", var(--font-geist-sans), sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #100e0a;
-    --surface: #1a170f;
-    --surface-sunken: #0b0a07;
-    --foreground: #f5f1e8;
-    --muted: #948b78;
-    --border: #2e2a1f;
-    --accent: #a855f7;
-    --accent-soft: #2c1b45;
-    --on-accent: #180a29;
+    --background: #0f151a;
+    --surface: #171f25;
+    --surface-sunken: #1e272d;
+    --foreground: #eaf1f2;
+    --muted: #8ea0a8;
+    --border: #2b363d;
+    --accent: #3fb3b0;
+    --accent-2: #7c93b8;
+    --accent-soft: #16302f;
+    --on-accent: #06201f;
     --warn: #f0b854;
-    --danger: #ff7a5c;
+    --danger: #e06a4e;
+    --ring: rgba(63, 179, 176, 0.22);
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #100e0a;
-  --surface: #1a170f;
-  --surface-sunken: #0b0a07;
-  --foreground: #f5f1e8;
-  --muted: #948b78;
-  --border: #2e2a1f;
-  --accent: #a855f7;
-  --accent-soft: #2c1b45;
-  --on-accent: #180a29;
+  --background: #0f151a;
+  --surface: #171f25;
+  --surface-sunken: #1e272d;
+  --foreground: #eaf1f2;
+  --muted: #8ea0a8;
+  --border: #2b363d;
+  --accent: #3fb3b0;
+  --accent-2: #7c93b8;
+  --accent-soft: #16302f;
+  --on-accent: #06201f;
   --warn: #f0b854;
-  --danger: #ff7a5c;
+  --danger: #e06a4e;
+  --ring: rgba(63, 179, 176, 0.22);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  background-image:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 0);
+  background-size: 22px 22px;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px) scale(0.99);
   }
   to {
     opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes softBounce {
+  0%, 80%, 100% {
     transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, 0) scale(1.05);
   }
 }
 

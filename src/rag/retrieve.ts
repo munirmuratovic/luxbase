@@ -10,6 +10,8 @@ export type RetrievedChunk = {
   distance: number;
 };
 
+const MAX_RELEVANT_DISTANCE = 0.55;
+
 export async function retrieve(query: string, topK = 5): Promise<RetrievedChunk[]> {
   const queryVector = await embed(query);
   const embeddingParam = JSON.stringify(queryVector);
@@ -48,7 +50,10 @@ export async function retrieve(query: string, topK = 5): Promise<RetrievedChunk[
     })),
   ];
 
-  return merged.sort((a, b) => a.distance - b.distance).slice(0, topK);
+  return merged
+    .filter((c) => c.distance <= MAX_RELEVANT_DISTANCE)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, topK);
 }
 
 function describeRecord(

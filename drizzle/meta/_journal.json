@@ -29,6 +29,13 @@
       "when": 1788640827881,
       "tag": "0003_quiet_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788648162946,
+      "tag": "0004_harsh_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

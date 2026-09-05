@@ -6,20 +6,20 @@ import { cn } from "@/lib/cn";
 type BaseButtonProps = React.ComponentPropsWithRef<typeof BaseButton>;
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-semibold transition-all disabled:pointer-events-none disabled:opacity-40",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full text-sm font-semibold transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {
       variant: {
         default:
-          "bg-accent text-on-accent hover:brightness-110 active:scale-95",
-        ghost: "text-muted hover:bg-surface-sunken hover:text-foreground",
+          "bg-accent text-on-accent shadow-[0_8px_20px_-8px_var(--ring)] hover:shadow-[0_10px_24px_-6px_var(--ring)] hover:brightness-110 active:scale-95",
+        ghost: "text-muted hover:bg-surface-sunken hover:text-foreground active:scale-95",
         outline:
-          "border border-border bg-transparent hover:bg-surface-sunken",
+          "border border-border bg-transparent hover:bg-surface-sunken hover:border-accent/40 active:scale-95",
       },
       size: {
-        default: "h-10 px-5",
+        default: "h-11 px-6",
         sm: "h-8 px-3 text-xs",
-        icon: "h-8 w-8",
+        icon: "h-9 w-9",
       },
     },
     defaultVariants: {

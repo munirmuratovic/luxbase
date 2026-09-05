@@ -23,9 +23,9 @@ export const TabsTab = React.forwardRef<
   <BaseTabs.Tab
     ref={ref}
     className={cn(
-      "rounded-full px-3 py-1 text-xs font-semibold capitalize transition-all",
+      "rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-all duration-200 ease-out",
       "text-muted hover:bg-surface-sunken hover:text-foreground",
-      "data-[selected]:bg-accent data-[selected]:text-on-accent data-[selected]:hover:bg-accent",
+      "data-[selected]:bg-accent data-[selected]:text-on-accent data-[selected]:shadow-[0_6px_16px_-6px_var(--ring)] data-[selected]:hover:bg-accent",
       className,
     )}
     {...props}

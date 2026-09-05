@@ -17,22 +17,22 @@ export async function generateAnswer(
   const isQuestion = /\?\s*$/.test(query.trim());
 
   const prompt = isQuestion
-    ? `You are a helpful assistant. Answer the question using the context below as directly as possible. If the context has nothing relevant, say so plainly.
+    ? `You are a helpful assistant. Answer the question below as directly and specifically as possible — stay strictly on the topic the user actually asked about, do not pivot to a related-but-different topic. The context is optional background: use it only if it directly helps answer this exact question, and ignore any part of it that isn't about what was asked. If nothing relevant is available, say so plainly instead of substituting a different topic.
 
-Context:
+Context (optional, may be irrelevant):
 ${contextBlock}
 
 ${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}Question: ${query}
 
-Answer:`
-    : `You are a helpful assistant having a casual conversation. React naturally to what the user just said — acknowledge it, comment on it, or continue the conversation. Use the background info below only if it's actually relevant.
+Answer the question above directly, on-topic, without changing the subject:`
+    : `You are a helpful assistant having a casual conversation. React naturally and specifically to what the user just said — stay on the exact topic they raised, do not steer the conversation to a different subject. Use the background info below only if it's directly relevant to what they just said; ignore it otherwise.
 
-Background info:
+Background info (optional, may be irrelevant):
 ${contextBlock}
 
 ${historyBlock ? `Conversation so far:\n${historyBlock}\n\n` : ""}They just said: ${query}
 
-Your reply:`;
+Reply directly to what they just said, on-topic:`;
 
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: "POST",
