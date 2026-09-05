@@ -25,25 +25,26 @@ export async function judgeForMemory(message: string): Promise<MemoryJudgement> 
     return { shouldSave: false, facts: [] };
   }
 
-  const prompt = `Extract any facts, preferences, or instructions about the user from this message, as structured key-value entries. Only extract things explicitly stated — never invent values.
+  const prompt = `Extract every fact, preference, opinion, or instruction about the user from this message, as structured key-value entries. Only extract things explicitly stated — never invent values. Lean toward extracting: a short, casual statement like "I like cars" or "I'm tired" still counts.
 
-Do NOT extract anything if the message has no clear statement about the user (e.g. small talk, commands unrelated to the user, vague remarks).
+Only produce zero facts if the message is truly empty of content about the user — pure greetings ("hey", "thanks"), acknowledgements ("ok", "got it"), or questions.
 
 Each fact has:
 - subject: who/what it's about (usually "user")
-- attribute: short snake_case name for the kind of fact (e.g. "name", "location", "theme_preference", "job")
+- attribute: short snake_case name for the kind of fact (e.g. "name", "location", "theme_preference", "job", "likes")
 - value: the actual fact, as a short standalone phrase
 
 Examples:
-Message: "My name is Alex and I work in finance." -> {"shouldSave": true, "facts": [{"subject":"user","attribute":"name","value":"Alex"},{"subject":"user","attribute":"job","value":"works in finance"}]}
-Message: "hey how's it going" -> {"shouldSave": false, "facts": []}
-Message: "From now on, always answer in bullet points." -> {"shouldSave": true, "facts": [{"subject":"user","attribute":"response_style","value":"always answer in bullet points"}]}
-Message: "My favorite color is blue." -> {"shouldSave": true, "facts": [{"subject":"user","attribute":"favorite_color","value":"blue"}]}
-Message: "I prefer dark mode." -> {"shouldSave": true, "facts": [{"subject":"user","attribute":"theme_preference","value":"dark mode"}]}
+Message: "My name is Alex and I work in finance." -> {"facts": [{"subject":"user","attribute":"name","value":"Alex"},{"subject":"user","attribute":"job","value":"works in finance"}]}
+Message: "hey how's it going" -> {"facts": []}
+Message: "From now on, always answer in bullet points." -> {"facts": [{"subject":"user","attribute":"response_style","value":"always answer in bullet points"}]}
+Message: "I like cars." -> {"facts": [{"subject":"user","attribute":"likes","value":"cars"}]}
+Message: "I prefer dark mode." -> {"facts": [{"subject":"user","attribute":"theme_preference","value":"dark mode"}]}
+Message: "thanks!" -> {"facts": []}
 
 Message: "${message}"
 
-Respond with only JSON, no other text: {"shouldSave": true or false, "facts": [{"subject": "...", "attribute": "...", "value": "..."}]}`;
+Respond with only JSON, no other text: {"facts": [{"subject": "...", "attribute": "...", "value": "..."}]}`;
 
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: "POST",

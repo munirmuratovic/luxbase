@@ -113,7 +113,7 @@ export default function RagPage() {
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ block: "nearest" });
-  }, [messages]);
+  }, [messages, asking, steps]);
 
   async function deleteRow(table: TableKind, id: string) {
     await fetch("/api/rag/manage", {
@@ -211,6 +211,13 @@ export default function RagPage() {
     documents: docs.length,
   };
 
+  const lastStep = steps[steps.length - 1];
+  const currentStageLabel = lastStep
+    ? lastStep.status === "start"
+      ? `${STAGE_LABEL[lastStep.stage]}…`
+      : `${STAGE_LABEL[lastStep.stage]} done`
+    : "Starting…";
+
   return (
     <div className="min-h-full flex-1 bg-background font-sans text-foreground">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-8 lg:h-screen lg:py-10">
@@ -290,6 +297,20 @@ export default function RagPage() {
                       )}
                     </div>
                   ))}
+                  {asking && (
+                    <div className="mr-auto max-w-[85%]">
+                      <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-surface-sunken px-4 py-2.5 text-sm text-muted">
+                        <span className="flex gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
+                        </span>
+                        <span className="font-mono text-xs">
+                          {currentStageLabel}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div ref={logEndRef} />
                 </div>
               )}
@@ -322,7 +343,9 @@ export default function RagPage() {
                 Pipeline
               </h2>
               {steps.length === 0 ? (
-                <p className="text-xs text-muted">Waiting for a message.</p>
+                <p className="text-xs text-muted">
+                  {asking ? "Starting…" : "Waiting for a message."}
+                </p>
               ) : (
                 <ol className="relative flex flex-col gap-3 border-l border-border pl-4">
                   {steps
@@ -392,6 +415,14 @@ export default function RagPage() {
                         )}
                       </li>
                     ))}
+                  {lastStep?.status === "start" && (
+                    <li className="relative">
+                      <span className="absolute -left-[1.1rem] top-1 h-2 w-2 animate-pulse rounded-full bg-accent" />
+                      <span className="text-xs font-medium text-accent">
+                        {STAGE_LABEL[lastStep.stage]}…
+                      </span>
+                    </li>
+                  )}
                 </ol>
               )}
             </div>
