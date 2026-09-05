@@ -102,10 +102,14 @@ export async function POST(request: Request) {
 
         let remembered: string[] = [];
 
-        if (looksLikeStructuredPaste(message)) {
+        if (looksLikeStructuredPaste(message, recentHistory)) {
           enqueue("step", { stage: "extract_records", status: "start" });
           const extractStart = Date.now();
-          const extracted = await extractRecords(message);
+          const combinedText = [
+            ...recentHistory.map((t) => t.text),
+            message,
+          ].join("\n\n");
+          const extracted = await extractRecords(combinedText);
           enqueue("step", {
             stage: "extract_records",
             status: "done",

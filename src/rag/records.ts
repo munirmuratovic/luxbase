@@ -20,7 +20,8 @@ Each record has:
 - "data": an object with the relevant fields for that type, e.g. for work_experience: {"company": "...", "title": "...", "description": "...", "skills": ["..."]}
 
 Rules:
-- One record per role/entry, even if the same company appears multiple times with different titles.
+- One record per role, identified by its own company/title/date-range header — not one record per bullet point or achievement. If a role header is followed by several achievement bullets or paragraphs, combine them into a single "description" (joined with "; ") on ONE record for that role.
+- Only start a new record when a new company/title/date-range header appears. Body text without its own header belongs to the role above it.
 - Ignore duration text like "3 yrs 11 mos" — derive dates only from explicit date ranges.
 - Ignore the "+N skills" text, just list the skills that are explicitly named.
 

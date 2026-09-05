@@ -70,13 +70,25 @@ export async function saveRecord(record: ExtractedRecord) {
     );
 
     if (match) {
+      const existingData = match.data as Record<string, unknown>;
+      const existingDescription = String(existingData.description ?? "").trim();
+      const newDescription = String(record.data.description ?? "").trim();
+      const mergedDescription =
+        existingDescription && newDescription && existingDescription !== newDescription
+          ? `${existingDescription}; ${newDescription}`
+          : newDescription || existingDescription;
+
+      const mergedData = { ...existingData, ...record.data, description: mergedDescription };
+      const mergedText = `${record.type}: ${JSON.stringify(mergedData)}`;
+      const mergedVector = await embed(mergedText);
+
       await db
         .update(records)
         .set({
           startDate: record.startDate,
           endDate: record.endDate,
-          data: record.data,
-          embedding: vector,
+          data: mergedData,
+          embedding: mergedVector,
         })
         .where(eq(records.id, match.id));
       return;

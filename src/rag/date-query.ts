@@ -11,9 +11,17 @@ export function mightReferenceDate(message: string): boolean {
 const DATE_RANGE_HINT =
   /\b(19|20)\d{2}\s*-\s*(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}\s*[-–]\s*(present|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})\b/i;
 
-export function looksLikeStructuredPaste(message: string): boolean {
-  const lineCount = message.split("\n").filter((l) => l.trim()).length;
-  return lineCount >= 6 && DATE_RANGE_HINT.test(message);
+function isStructuredPasteText(text: string): boolean {
+  const lineCount = text.split("\n").filter((l) => l.trim()).length;
+  return lineCount >= 6 && DATE_RANGE_HINT.test(text);
+}
+
+export function looksLikeStructuredPaste(
+  message: string,
+  history: { role: string; text: string }[] = [],
+): boolean {
+  if (isStructuredPasteText(message)) return true;
+  return history.some((turn) => isStructuredPasteText(turn.text));
 }
 
 export async function extractDateFromQuery(
