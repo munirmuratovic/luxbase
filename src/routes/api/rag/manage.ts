@@ -1,3 +1,4 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, memories, records } from "@/db/schema";
@@ -9,7 +10,7 @@ function isTableName(value: unknown): value is TableName {
   return typeof value === "string" && value in TABLES;
 }
 
-export async function DELETE(request: Request) {
+async function DELETE({ request }: { request: Request }) {
   const body = await request.json();
   const { table, id } = body as { table?: string; id?: string };
 
@@ -27,3 +28,7 @@ export async function DELETE(request: Request) {
   const result = await db.delete(target);
   return Response.json({ deleted: result.rowCount ?? 0 });
 }
+
+export const Route = createFileRoute("/api/rag/manage")({
+  server: { handlers: { DELETE } },
+});

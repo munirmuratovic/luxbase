@@ -1,3 +1,4 @@
+import { createFileRoute } from "@tanstack/react-router";
 import {
   extractDateFromQuery,
   looksLikeStructuredPaste,
@@ -7,7 +8,7 @@ import {
   looksLikeDeleteIntent,
   resolveDeleteTarget,
 } from "@/rag/delete-intent";
-import { generateAnswer } from "@/rag/generate";
+import { streamAnswer } from "@/rag/generate";
 import type { HistoryTurn } from "@/rag/history";
 import {
   addMessage,
@@ -30,7 +31,7 @@ function sseEvent(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function POST(request: Request) {
+async function POST({ request }: { request: Request }) {
   const body = await request.json();
   const { message, history, conversationId: incomingConversationId } = body as {
     message?: string;
@@ -187,11 +188,16 @@ export async function POST(request: Request) {
 
         enqueue("step", { stage: "generate", status: "start" });
         const generateStart = Date.now();
-        const answer = await generateAnswer(
+        let answer = "";
+        for await (const token of streamAnswer(
           message,
           chunks.map((c) => c.content),
           recentHistory,
-        );
+        )) {
+          answer += token;
+          enqueue("token", { token });
+        }
+        answer = answer.trim();
         enqueue("step", {
           stage: "generate",
           status: "done",
@@ -228,3 +234,7 @@ export async function POST(request: Request) {
     },
   });
 }
+
+export const Route = createFileRoute("/api/rag/chat")({
+  server: { handlers: { POST } },
+});

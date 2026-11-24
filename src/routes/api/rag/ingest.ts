@@ -1,6 +1,7 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { ingestDocument } from "@/rag/ingest";
 
-export async function POST(request: Request) {
+async function POST({ request }: { request: Request }) {
   const body = await request.json();
   const { content, source } = body as { content?: string; source?: string };
 
@@ -14,3 +15,7 @@ export async function POST(request: Request) {
   const result = await ingestDocument(content, source);
   return Response.json(result);
 }
+
+export const Route = createFileRoute("/api/rag/ingest")({
+  server: { handlers: { POST } },
+});

@@ -1,8 +1,9 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, memories, records } from "@/db/schema";
 
-export async function GET() {
+async function GET() {
   const [docRows, memoryRows, recordRows] = await Promise.all([
     db
       .select({
@@ -44,3 +45,7 @@ export async function GET() {
     records: recordRows,
   });
 }
+
+export const Route = createFileRoute("/api/rag/documents")({
+  server: { handlers: { GET } },
+});

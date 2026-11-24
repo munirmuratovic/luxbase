@@ -1,7 +1,8 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { generateAnswer } from "@/rag/generate";
 import { retrieve } from "@/rag/retrieve";
 
-export async function POST(request: Request) {
+async function POST({ request }: { request: Request }) {
   const body = await request.json();
   const { query, topK } = body as { query?: string; topK?: number };
 
@@ -25,3 +26,7 @@ export async function POST(request: Request) {
 
   return Response.json({ answer, sources: chunks });
 }
+
+export const Route = createFileRoute("/api/rag/query")({
+  server: { handlers: { POST } },
+});

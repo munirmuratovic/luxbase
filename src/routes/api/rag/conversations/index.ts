@@ -1,14 +1,19 @@
+import { createFileRoute } from "@tanstack/react-router";
 import {
   createConversation,
   listConversations,
 } from "@/rag/conversations";
 
-export async function GET() {
+async function GET() {
   const rows = await listConversations();
   return Response.json({ conversations: rows });
 }
 
-export async function POST() {
+async function POST() {
   const conversation = await createConversation();
   return Response.json({ conversation });
 }
+
+export const Route = createFileRoute("/api/rag/conversations/")({
+  server: { handlers: { GET, POST } },
+});

@@ -1,5 +1,4 @@
-"use client";
-
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
@@ -74,7 +73,21 @@ const STAGE_LABEL: Record<StepEvent["stage"], string> = {
   delete: "Removing",
 };
 
-type TableKind = "memories" | "records" | "documents";
+type TableKind = "memories" | "records" | "documents" | "map";
+
+type MapPoint = {
+  id: string;
+  kind: "document" | "memory" | "record";
+  label: string;
+  x: number;
+  y: number;
+};
+
+const KIND_COLOR: Record<MapPoint["kind"], string> = {
+  memory: "var(--color-accent)",
+  record: "var(--color-accent-2)",
+  document: "var(--color-warn)",
+};
 
 type Conversation = {
   id: string;
@@ -116,7 +129,180 @@ function groupConversations(items: Conversation[]) {
   return groups.filter((g) => g.items.length > 0);
 }
 
-export default function Home() {
+function SourcesDisclosure({ sources }: { sources: Source[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2 pl-10">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
+      >
+        <span
+          className={cn(
+            "inline-block text-[10px] transition-transform duration-200",
+            open && "rotate-90",
+          )}
+          aria-hidden
+        >
+          ▸
+        </span>
+        {sources.length} source{sources.length === 1 ? "" : "s"}
+      </button>
+      {open && (
+        <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-border pl-3 text-xs text-muted">
+          {sources.map((s) => (
+            <li key={s.id}>
+              {s.content.slice(0, 90)}
+              {s.content.length > 90 ? "…" : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EmbeddingsMap({ points }: { points: MapPoint[] }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [hovered, setHovered] = useState<MapPoint | null>(null);
+
+  const bounds = (() => {
+    if (points.length === 0) return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const pad = 0.15;
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    return {
+      minX: minX - spanX * pad,
+      maxX: maxX + spanX * pad,
+      minY: minY - spanY * pad,
+      maxY: maxY + spanY * pad,
+    };
+  })();
+
+  function toScreen(p: MapPoint, width: number, height: number) {
+    const nx = (p.x - bounds.minX) / (bounds.maxX - bounds.minX || 1);
+    const ny = (p.y - bounds.minY) / (bounds.maxY - bounds.minY || 1);
+    return { sx: nx * width, sy: height - ny * height };
+  }
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const styles = getComputedStyle(document.documentElement);
+    const borderColor = styles.getPropertyValue("--border").trim() || "#ddd";
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(rect.width / 2, 0);
+    ctx.lineTo(rect.width / 2, rect.height);
+    ctx.moveTo(0, rect.height / 2);
+    ctx.lineTo(rect.width, rect.height / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const p of points) {
+      const { sx, sy } = toScreen(p, rect.width, rect.height);
+      const color = styles
+        .getPropertyValue(
+          p.kind === "memory"
+            ? "--accent"
+            : p.kind === "record"
+              ? "--accent-2"
+              : "--warn",
+        )
+        .trim();
+      ctx.beginPath();
+      ctx.arc(sx, sy, hovered?.id === p.id ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = color || "#888";
+      ctx.globalAlpha = hovered && hovered.id !== p.id ? 0.35 : 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, hovered]);
+
+  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    let closest: MapPoint | null = null;
+    let closestDist = 14;
+    for (const p of points) {
+      const { sx, sy } = toScreen(p, rect.width, rect.height);
+      const dist = Math.hypot(sx - mx, sy - my);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = p;
+      }
+    }
+    setHovered(closest);
+  }
+
+  if (points.length === 0) {
+    return (
+      <p className="py-1 text-xs text-muted">
+        Nothing to map yet — save a few memories or records first.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="relative flex-1 overflow-hidden rounded-2xl border border-border/60 bg-surface-sunken">
+        <canvas
+          ref={canvasRef}
+          className="h-full w-full cursor-crosshair"
+          style={{ width: "100%", height: "100%" }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHovered(null)}
+        />
+        {hovered && (
+          <div className="pointer-events-none absolute left-2 top-2 max-w-[85%] rounded-lg border border-border/60 bg-surface px-2.5 py-1.5 text-xs shadow-md">
+            <span className="font-medium capitalize">{hovered.kind}</span>
+            <span className="text-muted"> · </span>
+            <span className="text-muted">{hovered.label}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-4 px-1 text-[11px] text-muted">
+        {(["memory", "record", "document"] as const).map((kind) => (
+          <span key={kind} className="flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: KIND_COLOR[kind] }}
+            />
+            {kind}s
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export const Route = createFileRoute("/")({ component: Home });
+
+function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
@@ -127,10 +313,13 @@ export default function Home() {
   const [recordRows, setRecordRows] = useState<RecordRow[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TableKind>("memories");
+  const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
+  const [mapLoading, setMapLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -193,6 +382,17 @@ export default function Home() {
     }
   }
 
+  async function loadMap() {
+    setMapLoading(true);
+    try {
+      const res = await fetch("/api/rag/embeddings-map");
+      const data = await res.json();
+      setMapPoints(data.points ?? []);
+    } finally {
+      setMapLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadDocs();
     loadConversations();
@@ -204,7 +404,7 @@ export default function Home() {
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [messages, asking, steps]);
+  }, [messages, asking, steps, streamingText]);
 
   async function deleteRow(table: TableKind, id: string) {
     await fetch("/api/rag/manage", {
@@ -237,6 +437,7 @@ export default function Home() {
     setAsking(true);
     setSteps([]);
     setShowTrace(false);
+    setStreamingText("");
 
     try {
       const res = await fetch("/api/rag/chat", {
@@ -278,7 +479,10 @@ export default function Home() {
             if (data.stage === "save" && data.status === "done") {
               loadDocs();
             }
+          } else if (event === "token") {
+            setStreamingText((prev) => prev + data.token);
           } else if (event === "final") {
+            setStreamingText("");
             setMessages((prev) => [
               ...prev,
               {
@@ -307,6 +511,7 @@ export default function Home() {
       ]);
     } finally {
       setAsking(false);
+      setStreamingText("");
       inputRef.current?.focus();
     }
   }
@@ -315,6 +520,7 @@ export default function Home() {
     memories: memoryRows.length,
     records: recordRows.length,
     documents: docs.length,
+    map: mapPoints.length,
   };
 
   const lastStep = steps[steps.length - 1];
@@ -511,20 +717,7 @@ export default function Home() {
                   )}
 
                   {m.sources && m.sources.length > 0 && (
-                    <details className="mt-2 pl-10 text-xs text-muted">
-                      <summary className="cursor-pointer select-none transition-colors hover:text-foreground">
-                        {m.sources.length} source
-                        {m.sources.length === 1 ? "" : "s"}
-                      </summary>
-                      <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-border pl-3">
-                        {m.sources.map((s) => (
-                          <li key={s.id}>
-                            {s.content.slice(0, 90)}
-                            {s.content.length > 90 ? "…" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
+                    <SourcesDisclosure sources={m.sources} />
                   )}
                 </div>
               ))}
@@ -537,23 +730,34 @@ export default function Home() {
                     <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-on-accent">
                       L
                     </div>
-                    <div className="mt-1 flex items-center gap-2.5 text-sm text-muted">
-                      <span className="flex gap-1">
+                    {streamingText ? (
+                      <p className="mt-1 flex-1 whitespace-pre-wrap text-sm leading-relaxed">
+                        {streamingText}
                         <span
-                          className="h-1.5 w-1.5 rounded-full bg-accent"
-                          style={{ animation: "softBounce 1.1s ease-in-out infinite", animationDelay: "-0.3s" }}
+                          className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 bg-accent"
+                          style={{ animation: "softBounce 0.9s steps(1) infinite" }}
+                          aria-hidden
                         />
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-accent"
-                          style={{ animation: "softBounce 1.1s ease-in-out infinite", animationDelay: "-0.15s" }}
-                        />
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-accent"
-                          style={{ animation: "softBounce 1.1s ease-in-out infinite" }}
-                        />
-                      </span>
-                      <span className="text-xs">{currentStageLabel}…</span>
-                    </div>
+                      </p>
+                    ) : (
+                      <div className="mt-1 flex items-center gap-2.5 text-sm text-muted">
+                        <span className="flex gap-1">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-accent"
+                            style={{ animation: "softBounce 1.1s ease-in-out infinite", animationDelay: "-0.3s" }}
+                          />
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-accent"
+                            style={{ animation: "softBounce 1.1s ease-in-out infinite", animationDelay: "-0.15s" }}
+                          />
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-accent"
+                            style={{ animation: "softBounce 1.1s ease-in-out infinite" }}
+                          />
+                        </span>
+                        <span className="text-xs">{currentStageLabel}…</span>
+                      </div>
+                    )}
                   </div>
                   {completedSteps.length > 0 && (
                     <button
@@ -634,42 +838,61 @@ export default function Home() {
         >
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as TableKind)}
+            onValueChange={(v) => {
+              const tab = v as TableKind;
+              setActiveTab(tab);
+              if (tab === "map") loadMap();
+            }}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <div className="mb-4 flex items-center gap-1.5">
-              <TabsList className="rounded-full bg-surface-sunken p-1 shadow-inner">
-                {(["memories", "records", "documents"] as TableKind[]).map(
-                  (tab) => (
-                    <TabsTab key={tab} value={tab}>
-                      {tab}
-                      <span className="ml-1 text-[10px] tabular-nums opacity-70">
-                        {tabCount[tab]}
-                      </span>
-                    </TabsTab>
-                  ),
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2
+                className="text-sm font-bold tracking-tight"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Memory
+              </h2>
+              <div className="flex items-center gap-2">
+                {(docsLoading || (activeTab === "map" && mapLoading)) && (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted" />
                 )}
-              </TabsList>
-              {docsLoading && (
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted" />
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => clearTable(activeTab)}
-                disabled={tabCount[activeTab] === 0}
-                className="ml-auto h-auto rounded-md px-2 py-1 font-normal hover:text-danger"
-              >
-                Clear
-              </Button>
-              <button
-                onClick={() => setPanelOpen(false)}
-                aria-label="Close panel"
-                className="text-muted transition-colors hover:text-foreground"
-              >
-                ✕
-              </button>
+                {activeTab !== "map" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => clearTable(activeTab)}
+                    disabled={tabCount[activeTab] === 0}
+                    className="h-auto rounded-md px-2 py-1 font-normal hover:text-danger"
+                  >
+                    Clear
+                  </Button>
+                )}
+                <button
+                  onClick={() => setPanelOpen(false)}
+                  aria-label="Close panel"
+                  className="text-muted transition-colors hover:text-foreground"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+
+            <TabsList className="mb-4 grid grid-cols-4 gap-1 rounded-full bg-surface-sunken p-1 shadow-inner">
+              {(["memories", "records", "documents", "map"] as TableKind[]).map(
+                (tab) => (
+                  <TabsTab
+                    key={tab}
+                    value={tab}
+                    className="flex items-center justify-center gap-1 px-2"
+                  >
+                    <span className="truncate">{tab}</span>
+                    <span className="text-[10px] tabular-nums opacity-70">
+                      {tabCount[tab]}
+                    </span>
+                  </TabsTab>
+                ),
+              )}
+            </TabsList>
 
             <TabsPanel value="memories" className="overflow-y-auto">
               <ul className="flex flex-col gap-0.5">
@@ -766,6 +989,10 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
+            </TabsPanel>
+
+            <TabsPanel value="map" className="min-h-0 flex-1 overflow-hidden">
+              <EmbeddingsMap points={mapPoints} />
             </TabsPanel>
           </Tabs>
         </div>

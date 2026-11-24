@@ -14,6 +14,9 @@
 /coverage
 
 # next.js
+dist/
+.tanstack/
+src/routeTree.gen.ts
 /.next/
 /out/
 
